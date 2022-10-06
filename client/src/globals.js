@@ -65,6 +65,7 @@ export const scatterplotMarginLeft = 11;
 
 export const rightSidebarWidth = 365;
 export const leftSidebarWidth = 365;
+export const upperRightSidebarHeight = 300; 
 export const leftSidebarSectionHeading = {
   fontSize: 18,
   textTransform: "uppercase",

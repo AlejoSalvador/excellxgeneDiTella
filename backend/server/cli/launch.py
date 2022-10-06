@@ -11,7 +11,7 @@ from backend.server.default_config import default_config
 from os import environ as env
 from backend.server.app.app import Server
 from backend.server.common.config.app_config import AppConfig
-from flask import redirect, session, jsonify, current_app
+from flask import redirect, session, jsonify, current_app, send_file
 from six.moves.urllib.parse import urlencode
 from backend.common.errors import DatasetAccessError, ConfigurationError
 from backend.common.utils.utils import sort_options
@@ -25,6 +25,15 @@ from functools import wraps
 import yaml
 from dotenv import load_dotenv, find_dotenv
 
+from PIL import Image as image
+from skimage import io as skiio
+import io
+import numpy
+from matplotlib import cm
+#Todo ALEJO Evitar que sea global y mantener el servidor con misma estructura de antes
+tiles=[]
+imin=[]
+maximu=0
 
 ENV_FILE = find_dotenv()
 if ENV_FILE:
@@ -534,11 +543,39 @@ def launch(
 
     click.echo("[cellxgene] Type CTRL-C at any time to exit.")
 
+    image.MAX_IMAGE_PIXELS = None
+    imin = skiio.imread('images/mosaic_Cellbound3_z3-002-002.tif')
+    #imin = skiio.imread('images/dinosaur.jpg')
+    M = imin.shape[0]//100
+    N = imin.shape[1]//100
+    tiles = [imin[x:x+M,y:y+N] for x in range(0,imin.shape[0],M) for y in range(0,imin.shape[1],N)]
+    maximu=imin.max()
+    @server.app.route("/return-files/<int:number>")
+    def return_files_tut(number):
+        try:
+
+            tileSizeChange=tiles[number]
+            tileSizeChange=tileSizeChange.astype(float)
+            tileSizeChange=tileSizeChange/maximu
+            
+            imout = image.fromarray(cm.viridis(tileSizeChange, bytes=True))
+            buffer = io.BytesIO()
+            #First save image as in-memory.
+            imout.save(buffer, "WEBP")
+            buffer.seek(0)
+            return send_file(buffer, mimetype='image/webp')
+
+        except Exception as e:
+            return str(e)
+
+
     if not server_config.app__verbose:
         f = open(os.devnull, "w")
         sys.stdout = f
     
+    
     if hosted:
+        
         oauth = OAuth(server.app)
         auth0 = oauth.register(
             'auth0',
@@ -574,7 +611,9 @@ def launch(
             session.clear()
             params = {'returnTo': auth_url, 'client_id': env.get("AUTH0_CLIENT_ID")}
             return redirect(auth0.api_base_url + '/v2/logout?' + urlencode(params))
-    
+
+        
+      
     try:
         server.app.config['SESSION_COOKIE_NAME'] = 'session_cookie'
         server.app.run(

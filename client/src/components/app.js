@@ -14,6 +14,7 @@ import TermsOfServicePrompt from "./termsPrompt";
 import { GlobalHotkeys } from "./hotkeys";
 import Sankey from "./sankey";
 import actions from "../actions";
+import ImageViewer from "./graph/imageViewer";
 
 @connect((state) => ({
   loading: state.controls.loading,
@@ -100,6 +101,22 @@ class App extends React.Component {
               </>
             )}}
             <RightSideBar />
+
+            {(viewportRef) => {
+              return (
+              <>
+                <Legend viewportRef={viewportRef} />
+                <div style={{
+                    zIndex: 0,
+                    gridArea: "top / right-sidebar-start / bottom / right-sidebar-end",
+                    position: "relative",
+                    height: sankey ? "0px" : "inherit",
+                    overflowX: "auto"
+                  }}>
+                <ImageViewer sankeyPlotMode={sankey} key={graphRenderCounter} graphWidth={viewportRef?.clientWidth} viewportRef={viewportRef} />
+                </div>
+              </>
+            )}}
           </Layout>
         )}
       </Container>

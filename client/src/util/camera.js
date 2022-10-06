@@ -16,13 +16,14 @@ function clamp(val, rng) {
 }
 
 class Camera {
-  constructor(canvas) {
+  constructor(canvas, locked=true) {
     this.prevEvent = {
       clientX: 0,
       clientY: 0,
       type: 0,
     };
     this.canvas = canvas;
+    this.locked=locked;
     this.viewMatrix = mat3.create();
     this.viewMatrixInv = mat3.create();
   }
@@ -50,8 +51,14 @@ class Camera {
       panBound - (m[6] - 1) / m[0],
     ];
 
-    const dxClamped = clamp(dx, dxRange);
-    const dyClamped = clamp(dy, dyRange);
+    var dxClamped=dx;
+    var dyClamped=dy;
+    if (this.locked)
+    {
+      dxClamped = clamp(dx, dxRange);
+      dyClamped = clamp(dy, dyRange);
+    }
+    
     if (Math.abs(dxClamped) <= EPSILON && Math.abs(dyClamped) <= EPSILON)
       return;
 
@@ -64,16 +71,22 @@ class Camera {
     Camera zoom at [x,y]
     */
     const m = this.viewMatrix;
-    const bounds = [-panBound, panBound];
-    x = clamp(x, bounds);
-    y = clamp(y, bounds);
-
-    const dClamped = clamp(d * m[0], [scaleMin, scaleMax]) / m[0];
+    if (this.locked)
+    {
+      const bounds = [-panBound, panBound];
+      x = clamp(x, bounds);
+      y = clamp(y, bounds);
+    }
+    var dClamped=d;
+    if (this.locked)
+    {
+      dClamped = clamp(d * m[0], [scaleMin, scaleMax]) / m[0];
+    }
     if (Math.abs(1 - dClamped) <= EPSILON) return; // noop request
 
     mat3.translate(m, m, [x, y]);
     mat3.scale(m, m, [dClamped, dClamped]);
-    mat3.translate(m, m, [-x, -y]);
+    mat3.translate(m, m, [-x, -y]); 
 
     mat3.invert(this.viewMatrixInv, m);
   }
@@ -173,8 +186,8 @@ class Camera {
   }
 }
 
-function attachCamera(canvas) {
-  return new Camera(canvas);
+function attachCamera(canvas, locked=true) {
+  return new Camera(canvas,locked);
 }
 
 export default attachCamera;
