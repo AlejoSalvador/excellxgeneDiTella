@@ -22,6 +22,7 @@ import CentroidLabels from "./overlays/centroidLabels";
 import actions from "../../actions";
 import renderThrottle from "../../util/renderThrottle";
 
+
 import { postAsyncSuccessToast } from "../framework/toasters";
 
 import {
@@ -357,6 +358,7 @@ class Graph extends React.Component {
     const hasResized =
       prevState.viewport.height !== viewport.height ||
       prevState.viewport.width !== viewport.width; // || graphWidth !== prevProps.graphWidth;
+      
     let stateChanges = {};
     if (
       (viewport.height && viewport.width && !toolSVG) || // first time init
@@ -724,7 +726,8 @@ class Graph extends React.Component {
       this.init = true;
       const { modelTF } = this.state;
       const { layoutChoice: layoutChoiceProps } = this.props;
-      const [layoutDf, colorDf, pointDilationDf] = await this.fetchData(
+      
+      const [layoutDf, layoutDfSpatial, colorDf, pointDilationDf] = await this.fetchData(
         annoMatrix,
         layoutChoice,
         colorsProp,
@@ -767,6 +770,25 @@ class Graph extends React.Component {
         pointDilationData,
         pointDilationLabel
       );
+       
+      const X3 = layoutDfSpatial.col("spatial_0").asArray();
+      const Y3 = layoutDfSpatial.col("spatial_1").asArray();
+      //positionsFiltered store the positition of the cells currently selected
+      const positionsFiltered = [];
+      for (let i = 0, len = flags.length; i < len; i += 1) {
+        if (flags[i]%2===1) //flags with 1 in the first bit indicate that the cell is currently selected
+        {
+          positionsFiltered.push(X3[i]);
+          positionsFiltered.push(Y3[i]);
+        }
+      }
+      if (positionsFiltered.length>0)
+      {
+        window.dispatchEvent(new CustomEvent("CellSelectionOnGraph", { 'detail': positionsFiltered }));
+      }
+      console.log("filteredPositions",positionsFiltered);
+      console.log("annoMatrix",annoMatrix);
+      
 
       const { width, height } = viewport;
       let nPoints = annoMatrix.nObs;
@@ -799,6 +821,7 @@ class Graph extends React.Component {
           }
         });
         flags = Float32Concat(flags, flags2);
+        
 
         const { cxgMode } = this.props;
         const colors2 = new Float32Array(3 * layoutDf2.length);
@@ -1031,6 +1054,7 @@ class Graph extends React.Component {
     const promises = [];
     // layout
     promises.push(annoMatrix.fetch("emb", layoutChoice.current));
+    promises.push(annoMatrix.fetch("emb", "spatial"));
     // promises.push(annoMatrix.fetch("jemb", layoutChoice.current))
     // color
     const query = this.createColorByQuery(colors);
@@ -1104,6 +1128,7 @@ class Graph extends React.Component {
       const y = Y[z];
       if (!(x < minX || x > maxX || y < minY || y > maxY)) {
         if (withinPolygon(polygon, x, y)) {
+          //Here i should register the average and then going to the average position. Be careful that this isnt the real spatial position
           I.push(i);
         }
       }

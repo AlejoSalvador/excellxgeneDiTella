@@ -34,6 +34,7 @@ import {
 
 const numberTilesRow=101;
 
+
 function withinPolygon(polygon, x, y) {
   const n = polygon.length;
   let p = polygon[n - 1];
@@ -93,6 +94,112 @@ function createModelTF() {
   return m;
 }
 
+class TileData{
+  constructor(texture, tileLocationX, tileLocationY) {
+    this.texture = texture;
+    this.tileLocationX = tileLocationX;
+    this.tileLocationY = tileLocationY;
+  }
+
+}
+
+
+class TileNode{
+  constructor(data) {
+    this.data = data;
+    this.next = null;
+    this.previous=null;
+  }
+}
+
+class TileLinkedList {
+  constructor() {
+    this._length = 0;
+    this.currentNode = null;
+    this.head = null;
+  }
+  //current node is set to the head since we want to start drawing again after adding new tiles
+  addNode(value) {
+    let node = new TileNode(value);
+    node.next=this.head;
+    if (this._length>0){
+      this.head.previous=node; 
+    }
+    this.head = node;   
+    this.currentNode = node;
+    this._length++;
+    return node;
+  }
+
+  getData(){
+    if (this.currentNode===null){
+      return null
+    }else{
+      return this.currentNode.data;
+    }
+  }
+  //if there is not next node return null
+  goNext(){
+    if (this._length===0)
+    {
+      return null;
+    }
+    this.currentNode = this.currentNode.next;
+    return this.currentNode;
+  }
+
+  //returns the nextNode after the one removed and sets currentNode to it. If the one removed is the last return null
+  removeNode(){
+    if (this._length===0){
+      return null;
+    }
+    this._length--;
+    //this.currentNode.data.texture.destroy();
+    if (this.currentNode.previous===null){
+      this.head=this.currentNode.next;
+      if (this.head!==null){
+        this.head.previous=null;
+      }
+      this.currentNode=this.head;
+      return this.currentNode;
+    }
+
+    let nextNode=this.currentNode.next;
+    let previousNode=this.currentNode.previous;
+
+    previousNode.next=nextNode;
+    if (nextNode!==null){
+      nextNode.previous=previousNode;
+    }
+    this.currentNode = this.currentNode.next;
+    return this.currentNode;
+  }
+  goToHead(){
+    this.currentNode = this.head;
+  }
+  getLength(){
+    return this._length;
+  }
+
+  printList() {
+    let array1 = [];
+    let array2 = [];
+    let currentList = this.head;
+    while (currentList !== null) {
+        array1.push(currentList.data.tileLocationX);
+        array2.push(currentList.data.tileLocationY);
+        currentList = currentList.next;
+    }
+
+    console.log(array1.join(' <--> '));
+    console.log(array2.join(' <--> '));
+    return this;
+}
+
+}
+
+
+
 @connect((state) => ({
   annoMatrix: state.annoMatrix,
   crossfilter: state.obsCrossfilter,
@@ -125,7 +232,7 @@ class ImageViewer extends React.Component {
     // setup canvas, webgl draw function and camera
     // canvas.getContext("webgl", {preserveDrawingBuffer: false});
     const camera = _camera(canvas, false);
-    camera.pan(-1.5,0.5);
+    camera.pan(-51.5,-51.5);
     camera.zoomAt(2);
     const regl = _regl(canvas);
     const drawTiles = _drawTiles(regl);
@@ -134,14 +241,6 @@ class ImageViewer extends React.Component {
     const pointBufferStart = regl.buffer();
     const pointBufferEnd = regl.buffer();
     const pointBufferTerminal = regl.buffer();
-    var colorBuffer=new Array(9);
-    for (var i=0;i<9;i+=1)
-    {
-      colorBuffer[i]=regl.texture(); 
-    }
-    const tileLocationX = new Array(9);
-    const tileLocationY = new Array(9);
-    const tileCurrentImageCounter = new Array(9).fill(0);
 
 
     const flagBuffer = regl.buffer();
@@ -152,11 +251,7 @@ class ImageViewer extends React.Component {
       pointBufferStart,
       pointBufferEnd,
       pointBufferTerminal,
-      colorBuffer,
       flagBuffer,
-      tileLocationX,
-      tileLocationY,
-      tileCurrentImageCounter,
     };
   }
 
@@ -320,13 +415,12 @@ class ImageViewer extends React.Component {
       pointBufferStart: null,
       pointBufferEnd: null,
       pointBufferTerminal: null,
-      colorBuffer: null,
+      colorBuffer: new TileLinkedList(),
+      currentTransX: -50, //is was set to -50 so that any tile I try to draw first is getting drawn
+      currentTransY: -50,
       flagBuffer: null,
       nPoints: null,
       image:null,
-      tileLocationX:null,
-      tileLocationY:null,
-      tileCurrentImageCounter:null,
 
       // component rendering derived state - these must stay synchronized
       // with the reducer state they were generated from.
@@ -349,6 +443,7 @@ class ImageViewer extends React.Component {
 
   componentDidMount() {
     window.addEventListener("resize", this.handleResize);
+    window.addEventListener("CellSelectionOnGraph", (e) => this.handleCellSelection(e));
     this.myRef.current.addEventListener("wheel", this.handleLidarWheelEvent, {
       passive: false,
     });
@@ -415,6 +510,7 @@ class ImageViewer extends React.Component {
 
   componentWillUnmount() {
     window.removeEventListener("resize", this.handleResize);
+    window.removeEventListener("CellSelectionOnGraph", (e) => this.handleCellSelection(e));
     this.myRef.current.removeEventListener(
       "wheel",
       this.handleLidarWheelEvent,
@@ -431,6 +527,15 @@ class ImageViewer extends React.Component {
       viewport,
       projectionTF,
     });
+  };
+
+  handleCellSelection = (e) => {
+    const { camera} = this.state;
+    console.log(e);
+    camera.restart();
+    camera.zoomAt(2); 
+    camera.pan(-e.detail[0]*numberTilesRow,-e.detail[1]*numberTilesRow);
+    this.renderCanvas();
   };
 
   handleCanvasEvent = (e) => {
@@ -675,9 +780,9 @@ class ImageViewer extends React.Component {
     const { viewport } = this.state;
 
     /* clear out whatever was on the div, even if nothing, but usually the brushes etc */
-    const lasso = d3.select("#lasso-layer");
+    const lasso = d3.select("#lasso-layer-image-viewer");
 
-    const lidar = d3.select("#lidar-layer");
+    const lidar = d3.select("#lidar-layer-image-viewer");
     if (!lidar.empty()) {
       lidar.selectAll(".lidar-group").remove();
     }
@@ -706,13 +811,18 @@ class ImageViewer extends React.Component {
       handleCancel = this.handleLassoCancel.bind(this);
     }
 
+    let graphWrapper="#graph-wrapper-image-viewer";
+    let lassoLayer="#lasso-layer-image-viewer";
+
     const { svg: newToolSVG, tool, container } = setupSVGandBrushElements(
       selectionTool,
       handleStart,
       handleDrag,
       handleEnd,
       handleCancel,
-      viewport
+      viewport,
+      graphWrapper,
+      lassoLayer
     );
 
     return { toolSVG: newToolSVG, tool, container };
@@ -863,7 +973,6 @@ class ImageViewer extends React.Component {
     const {
       regl,
       drawTiles,
-      colorBuffer,
       pointBufferStart,
       pointBufferEnd,
       pointBufferTerminal,
@@ -876,7 +985,6 @@ class ImageViewer extends React.Component {
     this.renderPoints(
       regl,
       drawTiles,
-      colorBuffer,
       pointBufferStart,
       pointBufferEnd,
       pointBufferTerminal,
@@ -913,21 +1021,26 @@ class ImageViewer extends React.Component {
     );
   };
 
-  loadImage(imageI, arrayI)
+  loadImage(imageI)
   {
-    this.state.tileLocationX[arrayI]=(imageI%numberTilesRow);
-    this.state.tileLocationY[arrayI]=Math.trunc(imageI/numberTilesRow);
-    this.state.colorBuffer[arrayI]=this.state.regl.texture();
-    this.state.tileCurrentImageCounter[arrayI]+=1;
+    if (imageI<0||imageI>numberTilesRow*numberTilesRow-1)
+    {
+      return;
+    }
+    const {
+      colorBuffer,
+      regl,
+    } = this.state;
+
+    let tileData = new TileData(regl.texture(),(imageI%numberTilesRow),Math.trunc(imageI/numberTilesRow))
+
+    colorBuffer.addNode(tileData);
     var imag = new Image(); 
-    imag.imageCounter=this.state.tileCurrentImageCounter[arrayI];
     imag.onload = function() 
                   {
-                    if (imag.imageCounter==this.state.tileCurrentImageCounter[arrayI])
-                    {
-                      this.state.colorBuffer[arrayI]=this.state.regl.texture(imag); 
+                      tileData.texture=regl.texture(imag); 
                       this.renderCanvas(); 
-                    }
+                      //console.log(tileData.tileLocationX," ", tileData.tileLocationY);
                   }.bind(this);
     var sourceimg="/return-files/"+imageI;
     imag.src = sourceimg;
@@ -966,7 +1079,7 @@ class ImageViewer extends React.Component {
           }
           if (delta > 0) {
             container.call(tool.move, screenCoords);
-          }
+          }pan
         }
       } else if (toolCurrentSelection) {
         /* no selection, so clear the brush tool if it is set */
@@ -1262,12 +1375,6 @@ class ImageViewer extends React.Component {
       needToRenderCanvas = true;
     }
 
-    for (var i=0; i<9; i+=1)
-    {
-      this.loadImage(Math.trunc(i/3)*numberTilesRow+i%3 ,i);
-       
-    }
-
 
     if (flags !== prevAsyncProps?.flags) {
       flagBuffer({ data: flags, dimension: 1 });
@@ -1486,7 +1593,6 @@ class ImageViewer extends React.Component {
   async renderPoints(
     regl,
     drawTiles,
-    colorBuffer,
     pointBufferStart,
     pointBufferEnd,
     pointBufferTerminal,
@@ -1503,14 +1609,64 @@ class ImageViewer extends React.Component {
       layoutChoice,
       allGenes,
     } = this.props;
-    const { selectedOther, defaultSelectedOther, tileLocationX, tileLocationY } = this.state;
+    const { selectedOther, defaultSelectedOther, colorBuffer} = this.state;
     if (!this.reglCanvas || !annoMatrix) return;
 
     const cameraTF = camera.view();
     //transX and transY are the movement in the original space before scaling
-    var transY=cameraTF[7]/cameraTF[4];
-    var transX=cameraTF[6]/cameraTF[0];
+    var previousTransX=this.state.currentTransX;
+    var previousTransY=this.state.currentTransY;
+    this.state.currentTransX=-cameraTF[6]/cameraTF[0];
+    this.state.currentTransY=-cameraTF[7]/cameraTF[4]; //because Y is flipped because textures come in flipped
+
     const { width, height } = this.reglCanvas;
+
+
+    if (colorBuffer.getLength()>0){
+      
+      colorBuffer.goToHead();
+      let iNode=colorBuffer.getData();
+      while(iNode!==null){
+         if (Math.abs(this.state.currentTransX-iNode.tileLocationX-1+0.5)>1.5||Math.abs(this.state.currentTransY-iNode.tileLocationY-0.5)>1.5)
+        {
+          colorBuffer.removeNode();
+          iNode=colorBuffer.getData();
+          continue;
+        } 
+        colorBuffer.goNext();
+        iNode=colorBuffer.getData();
+      }
+    }
+
+    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX))>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY))>1)){
+      this.loadImage(Math.floor(this.state.currentTransY)*numberTilesRow+Math.floor(this.state.currentTransX));
+    }  
+    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX)+1)>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY))>1)){
+     this.loadImage(Math.floor(this.state.currentTransY)*numberTilesRow+Math.floor(this.state.currentTransX-1));
+    }
+    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX)-1)>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY))>1)){
+     this.loadImage(Math.floor(this.state.currentTransY)*numberTilesRow+Math.floor(this.state.currentTransX+1));
+    }
+
+    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX))>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY)+1)>1)){
+      this.loadImage(Math.floor(this.state.currentTransY-1)*numberTilesRow+Math.floor(this.state.currentTransX));
+    }
+    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX)+1)>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY)+1)>1)){
+      this.loadImage(Math.floor(this.state.currentTransY-1)*numberTilesRow+Math.floor(this.state.currentTransX-1));
+    }
+    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX)-1)>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY)+1)>1)){
+      this.loadImage(Math.floor(this.state.currentTransY-1)*numberTilesRow+Math.floor(this.state.currentTransX+1));
+    }
+    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX))>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY)-1)>1)){
+      this.loadImage(Math.floor(this.state.currentTransY+1)*numberTilesRow+Math.floor(this.state.currentTransX));
+    }
+    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX)+1)>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY)-1)>1)){
+      this.loadImage(Math.floor(this.state.currentTransY+1)*numberTilesRow+Math.floor(this.state.currentTransX-1));
+    }
+    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX)-1)>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY)-1)>1)){
+      this.loadImage(Math.floor(this.state.currentTransY+1)*numberTilesRow+Math.floor(this.state.currentTransX+1));
+    }
+
 
     let startTime;
     const frameLoop = regl.frame(async ({ time }) => {
@@ -1521,44 +1677,27 @@ class ImageViewer extends React.Component {
         depth: 1,
         color: [1, 1, 1, 1],
       });
-      for (var i=0; i<9; i+=1)
-      {
-        
-         if ((transX+tileLocationX[i]<-2) && (tileLocationX[i]+3<numberTilesRow))
-        {
-          this.loadImage(tileLocationY[i]*numberTilesRow+tileLocationX[i]+3, i);
-        }
-       
-        if ((transX+tileLocationX[i]>1)&&(tileLocationX[i]-3>=0))
-        {
-          this.loadImage(tileLocationY[i]*numberTilesRow+tileLocationX[i]-3, i);
 
-       
+      
+      if (colorBuffer.getLength()>0){
+        colorBuffer.goToHead();
+        let iNode=colorBuffer.getData();
+        while(iNode!==null){       
+          var mv=mat3.create(); 
+          mat3.translate(mv, cameraTF, [iNode.tileLocationX, iNode.tileLocationY]);
+          var projView = mat3.multiply(mat3.create(), projectionTF, mv);
+          drawTiles(
+            {
+              imageTXT: iNode.texture,
+    
+              projView,
+    
+            }
+          );
+          colorBuffer.goNext();
+          iNode=colorBuffer.getData();
         }
-    
-        if ((transY-tileLocationY[i]>1) && (tileLocationY[i]+3<numberTilesRow))
-        {
-          this.loadImage((tileLocationY[i]+3)*numberTilesRow+tileLocationX[i], i);
-        }
-        if ((transY-tileLocationY[i]<-2)&&(tileLocationY[i]-3>=0))
-        {
-          this.loadImage((tileLocationY[i]-3)*numberTilesRow+tileLocationX[i], i);
-        } 
-    
-    
-        var mv=mat3.create(); 
-        mat3.translate(mv, cameraTF, [tileLocationX[i], -tileLocationY[i]]);
-        var projView = mat3.multiply(mat3.create(), projectionTF, mv);
-        drawTiles(
-          {
-            imageTXT: colorBuffer[i],
-  
-            projView,
-  
-          }
-        );
       }
- 
 
       if (time - startTime > duration / 1000) {
         frameLoop.cancel();
@@ -1659,7 +1798,7 @@ class ImageViewer extends React.Component {
     const cameraTF = camera?.view()?.slice();
     return (
       <div
-        id="graph-wrapper"
+        id="graph-wrapper-image-viewer"
         style={{
           position: "relative",
           top: 0,
@@ -1681,7 +1820,7 @@ class ImageViewer extends React.Component {
           <CentroidLabels />
         </GraphOverlayLayer>
         <svg
-          id="lasso-layer"
+          id="lasso-layer-image-viewer"
           data-testid="layout-overlay"
           className="graph-svg"
           style={{
@@ -1701,7 +1840,7 @@ class ImageViewer extends React.Component {
           isOpen={graphInteractionMode === "lidar" && lidarFocused}
         >
           <svg
-            id="lidar-layer"
+            id="lidar-layer-image-viewer"
             className="graph-svg"
             style={{
               position: "absolute",

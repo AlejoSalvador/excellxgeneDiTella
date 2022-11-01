@@ -33,7 +33,7 @@ export default function drawTilesRegl(regl) {
 
     attributes: {
       position: [[0, 0], [1, 0], [0, 1], [0, 1], [1, 0], [1, 1]],
-      aVertexTextureCoords: [[0, 1], [1, 1], [0, 0], [0, 0], [1, 1], [1, 0]]
+      aVertexTextureCoords: [[0, 0], [1, 0], [0, 1], [0, 1], [1, 0], [1, 1]]
     },
 
     uniforms: {

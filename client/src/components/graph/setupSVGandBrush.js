@@ -13,9 +13,11 @@ export default (
   handleDragAction,
   handleEndAction,
   handleCancelAction,
-  viewport
+  viewport,
+  graphWrapper="#graph-wrapper",
+  lassoLayer="#lasso-layer"
 ) => {
-  const svg = d3.select("#graph-wrapper").select("#lasso-layer");
+  const svg = d3.select(graphWrapper).select(lassoLayer);
   if (svg.empty()) return {};
 
   if (selectionToolType === "brush") {

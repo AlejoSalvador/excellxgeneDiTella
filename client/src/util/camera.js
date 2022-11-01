@@ -28,6 +28,17 @@ class Camera {
     this.viewMatrixInv = mat3.create();
   }
 
+  restart(){
+    this.prevEvent = {
+      clientX: 0,
+      clientY: 0,
+      type: 0,
+    };
+    this.viewMatrix = mat3.create();
+    this.viewMatrixInv = mat3.create();
+
+  }
+
   view() {
     return this.viewMatrix;
   }
