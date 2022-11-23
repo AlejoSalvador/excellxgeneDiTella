@@ -1,8 +1,3 @@
-var imageTexture = new Image();
-
-   imageTexture.src = '/return-files/1'; 
-
-
 export default function drawTilesRegl(regl) {
   return regl({
     vert: `
@@ -32,8 +27,8 @@ export default function drawTilesRegl(regl) {
     }`,
 
     attributes: {
-      position: [[0, 0], [1, 0], [0, 1], [0, 1], [1, 0], [1, 1]],
-      aVertexTextureCoords: [[0, 0], [1, 0], [0, 1], [0, 1], [1, 0], [1, 1]]
+      position: regl.prop("position"),
+      aVertexTextureCoords: regl.prop("aVertexTextureCoords"),
     },
 
     uniforms: {

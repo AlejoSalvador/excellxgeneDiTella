@@ -787,7 +787,7 @@ class Graph extends React.Component {
         window.dispatchEvent(new CustomEvent("CellSelectionOnGraph", { 'detail': positionsFiltered }));
       }
       console.log("filteredPositions",positionsFiltered);
-      console.log("annoMatrix",annoMatrix);
+      //console.log("annoMatrix",annoMatrix);
       
 
       const { width, height } = viewport;

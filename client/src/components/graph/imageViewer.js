@@ -32,7 +32,10 @@ import {
   flagInvisible,
 } from "../../util/glHelpers";
 
-const numberTilesRow=101;
+let maxDepth=7;
+let numberTilesRow = Math.pow(2,maxDepth)+1;
+
+
 
 
 function withinPolygon(polygon, x, y) {
@@ -95,10 +98,12 @@ function createModelTF() {
 }
 
 class TileData{
-  constructor(texture, tileLocationX, tileLocationY) {
+  constructor(texture, tileLocationX, tileLocationY, depthLevel) {
     this.texture = texture;
     this.tileLocationX = tileLocationX;
     this.tileLocationY = tileLocationY;
+    this.depthLevel = depthLevel;
+    this.loaded = false;
   }
 
 }
@@ -117,6 +122,7 @@ class TileLinkedList {
     this._length = 0;
     this.currentNode = null;
     this.head = null;
+    this.tail = null;
   }
   //current node is set to the head since we want to start drawing again after adding new tiles
   addNode(value) {
@@ -124,6 +130,9 @@ class TileLinkedList {
     node.next=this.head;
     if (this._length>0){
       this.head.previous=node; 
+    }else
+    {
+      this.tail=node;
     }
     this.head = node;   
     this.currentNode = node;
@@ -145,6 +154,16 @@ class TileLinkedList {
       return null;
     }
     this.currentNode = this.currentNode.next;
+    return this.currentNode;
+  }
+
+  //if there is not next node return null
+  goPrevious(){
+    if (this._length===0)
+    {
+      return null;
+    }
+    this.currentNode = this.currentNode.previous;
     return this.currentNode;
   }
 
@@ -170,6 +189,9 @@ class TileLinkedList {
     previousNode.next=nextNode;
     if (nextNode!==null){
       nextNode.previous=previousNode;
+    }else
+    {
+      this.tail=previousNode;
     }
     this.currentNode = this.currentNode.next;
     return this.currentNode;
@@ -177,6 +199,11 @@ class TileLinkedList {
   goToHead(){
     this.currentNode = this.head;
   }
+
+  goToTail(){
+    this.currentNode = this.tail;
+  }
+
   getLength(){
     return this._length;
   }
@@ -191,8 +218,8 @@ class TileLinkedList {
         currentList = currentList.next;
     }
 
-    console.log(array1.join(' <--> '));
-    console.log(array2.join(' <--> '));
+    console.log("positionX=",array1.join(' <--> '));
+    console.log("positionY=",array2.join(' <--> '));
     return this;
 }
 
@@ -416,8 +443,9 @@ class ImageViewer extends React.Component {
       pointBufferEnd: null,
       pointBufferTerminal: null,
       colorBuffer: new TileLinkedList(),
-      currentTransX: -50, //is was set to -50 so that any tile I try to draw first is getting drawn
-      currentTransY: -50,
+      currentTransX: -10000000, //is was set to -50 so that any tile I try to draw first is getting drawn
+      currentTransY: -10000000,
+      previousDepthLevel: -2,
       flagBuffer: null,
       nPoints: null,
       image:null,
@@ -529,12 +557,33 @@ class ImageViewer extends React.Component {
     });
   };
 
+  
   handleCellSelection = (e) => {
     const { camera} = this.state;
-    console.log(e);
+
+    let i=0;
+    let xMax=0;
+    let xMin=1;
+    let yMax=0;
+    let yMin=1;
+    while (i<e.detail.length)
+    {
+      xMax=Math.max(xMax,e.detail[i]);
+      xMin=Math.min(xMin,e.detail[i]);
+
+      yMax=Math.max(yMax,e.detail[i+1]);
+      yMin=Math.min(yMin,e.detail[i+1]);
+      i+=2;
+    }
+    let xMiddle=(xMin+xMax)/2;
+    let yMiddle=(yMin+yMax)/2;
+    let maxRange=Math.max(xMax-xMin,yMax-yMin)+1/256;
     camera.restart();
-    camera.zoomAt(2); 
-    camera.pan(-e.detail[0]*numberTilesRow,-e.detail[1]*numberTilesRow);
+    numberTilesRow = Math.pow(2,maxDepth)+1;
+    const zoomValue=1/Math.pow(2,6)/maxRange;
+    camera.zoomAt(zoomValue); 
+
+    camera.pan(-xMiddle*numberTilesRow,-yMiddle*numberTilesRow); 
     this.renderCanvas();
   };
 
@@ -1021,9 +1070,11 @@ class ImageViewer extends React.Component {
     );
   };
 
-  loadImage(imageI)
+  loadImage(posX, posY, depthLevel)
   {
-    if (imageI<0||imageI>numberTilesRow*numberTilesRow-1)
+    numberTilesRow=Math.pow(2,depthLevel)+1;
+    
+    if (posX<0||posY<0||posX>numberTilesRow-1||posY>numberTilesRow-1)
     {
       return;
     }
@@ -1032,17 +1083,21 @@ class ImageViewer extends React.Component {
       regl,
     } = this.state;
 
-    let tileData = new TileData(regl.texture(),(imageI%numberTilesRow),Math.trunc(imageI/numberTilesRow))
+    const currentTileSize=Math.round(Math.pow(2, maxDepth-depthLevel));
+    let tileData = new TileData(regl.texture(),posX*currentTileSize,posY*currentTileSize, depthLevel);
 
     colorBuffer.addNode(tileData);
     var imag = new Image(); 
     imag.onload = function() 
                   {
                       tileData.texture=regl.texture(imag); 
+                      tileData.loaded=true;
                       this.renderCanvas(); 
                       //console.log(tileData.tileLocationX," ", tileData.tileLocationY);
                   }.bind(this);
-    var sourceimg="/return-files/"+imageI;
+
+    let imageNumber=posY*numberTilesRow+posX;
+    var sourceimg="/return-files/"+imageNumber+"/"+depthLevel;
     imag.src = sourceimg;
   }
   
@@ -1620,15 +1675,77 @@ class ImageViewer extends React.Component {
     this.state.currentTransY=-cameraTF[7]/cameraTF[4]; //because Y is flipped because textures come in flipped
 
     const { width, height } = this.reglCanvas;
+    let currentDepthLevel=Math.floor(Math.log2(cameraTF[0]*Math.pow(2,6)));
+    currentDepthLevel=Math.min(Math.max(1,currentDepthLevel),7);
+    const currentTileSize=Math.round(Math.pow(2, maxDepth-currentDepthLevel));
 
+     if (this.state.previousDepthLevel!==currentDepthLevel)
+    {
+      previousTransX=-10000000;
+      previousTransY=-10000000;
+      this.state.previousDepthLevel=currentDepthLevel;
+      /* if (colorBuffer.getLength()>0){
+      
+        colorBuffer.goToHead();
+        let iNode=colorBuffer.getData();
+        while(iNode!==null){  
+          colorBuffer.removeNode();
+          iNode=colorBuffer.getData();
+        }
+      } */
+    } 
 
-    if (colorBuffer.getLength()>0){
+    colorBuffer.printList();
+    console.log("currentTileSize ",currentTileSize);
+    console.log("currentTransX ",this.state.currentTransX);
+    console.log("currentTransY ",this.state.currentTransY);
+    
+
+    
+
+    if ((Math.abs(Math.floor(previousTransX/currentTileSize)-Math.floor(this.state.currentTransX/currentTileSize))>1)||(Math.abs(Math.floor(previousTransY/currentTileSize)-Math.floor(this.state.currentTransY/currentTileSize))>1)){
+      this.loadImage(Math.floor(this.state.currentTransX/currentTileSize),Math.floor(this.state.currentTransY/currentTileSize),currentDepthLevel);
+    }  
+    if ((Math.abs(Math.floor(previousTransX/currentTileSize)-Math.floor(this.state.currentTransX/currentTileSize)+1)>1)||(Math.abs(Math.floor(previousTransY/currentTileSize)-Math.floor(this.state.currentTransY/currentTileSize))>1)){
+     this.loadImage(Math.floor(this.state.currentTransX/currentTileSize-1),Math.floor(this.state.currentTransY/currentTileSize),currentDepthLevel);
+    }
+    if ((Math.abs(Math.floor(previousTransX/currentTileSize)-Math.floor(this.state.currentTransX/currentTileSize)-1)>1)||(Math.abs(Math.floor(previousTransY/currentTileSize)-Math.floor(this.state.currentTransY/currentTileSize))>1)){
+     this.loadImage(Math.floor(this.state.currentTransX/currentTileSize+1),Math.floor(this.state.currentTransY/currentTileSize),currentDepthLevel);
+    }
+
+    if ((Math.abs(Math.floor(previousTransX/currentTileSize)-Math.floor(this.state.currentTransX/currentTileSize))>1)||(Math.abs(Math.floor(previousTransY/currentTileSize)-Math.floor(this.state.currentTransY/currentTileSize)+1)>1)){
+      this.loadImage(Math.floor(this.state.currentTransX/currentTileSize),Math.floor(this.state.currentTransY/currentTileSize-1),currentDepthLevel);
+    }
+    if ((Math.abs(Math.floor(previousTransX/currentTileSize)-Math.floor(this.state.currentTransX/currentTileSize)+1)>1)||(Math.abs(Math.floor(previousTransY/currentTileSize)-Math.floor(this.state.currentTransY/currentTileSize)+1)>1)){
+      this.loadImage(Math.floor(this.state.currentTransX/currentTileSize-1),Math.floor(this.state.currentTransY/currentTileSize-1),currentDepthLevel);
+    }
+    if ((Math.abs(Math.floor(previousTransX/currentTileSize)-Math.floor(this.state.currentTransX/currentTileSize)-1)>1)||(Math.abs(Math.floor(previousTransY/currentTileSize)-Math.floor(this.state.currentTransY/currentTileSize)+1)>1)){
+      this.loadImage(Math.floor(this.state.currentTransX/currentTileSize+1),Math.floor(this.state.currentTransY/currentTileSize-1),currentDepthLevel);
+    }
+    if ((Math.abs(Math.floor(previousTransX/currentTileSize)-Math.floor(this.state.currentTransX/currentTileSize))>1)||(Math.abs(Math.floor(previousTransY/currentTileSize)-Math.floor(this.state.currentTransY/currentTileSize)-1)>1)){
+      this.loadImage(Math.floor(this.state.currentTransX/currentTileSize),Math.floor(this.state.currentTransY/currentTileSize+1),currentDepthLevel);
+    }
+    if ((Math.abs(Math.floor(previousTransX/currentTileSize)-Math.floor(this.state.currentTransX/currentTileSize)+1)>1)||(Math.abs(Math.floor(previousTransY/currentTileSize)-Math.floor(this.state.currentTransY/currentTileSize)-1)>1)){
+      this.loadImage(Math.floor(this.state.currentTransX/currentTileSize-1),Math.floor(this.state.currentTransY/currentTileSize+1),currentDepthLevel);
+    }
+    if ((Math.abs(Math.floor(previousTransX/currentTileSize)-Math.floor(this.state.currentTransX/currentTileSize)-1)>1)||(Math.abs(Math.floor(previousTransY/currentTileSize)-Math.floor(this.state.currentTransY/currentTileSize)-1)>1)){
+      this.loadImage(Math.floor(this.state.currentTransX/currentTileSize+1),Math.floor(this.state.currentTransY/currentTileSize+1),currentDepthLevel);
+    }
+
+    if (colorBuffer.getLength()>0)
+    {
       
       colorBuffer.goToHead();
       let iNode=colorBuffer.getData();
+      let allNewLoaded=true;
       while(iNode!==null){
-         if (Math.abs(this.state.currentTransX-iNode.tileLocationX-1+0.5)>1.5||Math.abs(this.state.currentTransY-iNode.tileLocationY-0.5)>1.5)
+        if (currentDepthLevel===iNode.depthLevel && iNode.loaded===false){
+          allNewLoaded=false;  
+        }
+        let specificTileSize=Math.round(Math.pow(2, maxDepth-iNode.depthLevel));
+        if (Math.abs(this.state.currentTransX/specificTileSize-iNode.tileLocationX/specificTileSize-0.5)>1.5||Math.abs(this.state.currentTransY/specificTileSize-iNode.tileLocationY/specificTileSize-0.5)>1.5)
         {
+          console.log("inside if");
           colorBuffer.removeNode();
           iNode=colorBuffer.getData();
           continue;
@@ -1636,36 +1753,27 @@ class ImageViewer extends React.Component {
         colorBuffer.goNext();
         iNode=colorBuffer.getData();
       }
-    }
-
-    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX))>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY))>1)){
-      this.loadImage(Math.floor(this.state.currentTransY)*numberTilesRow+Math.floor(this.state.currentTransX));
-    }  
-    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX)+1)>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY))>1)){
-     this.loadImage(Math.floor(this.state.currentTransY)*numberTilesRow+Math.floor(this.state.currentTransX-1));
-    }
-    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX)-1)>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY))>1)){
-     this.loadImage(Math.floor(this.state.currentTransY)*numberTilesRow+Math.floor(this.state.currentTransX+1));
-    }
-
-    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX))>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY)+1)>1)){
-      this.loadImage(Math.floor(this.state.currentTransY-1)*numberTilesRow+Math.floor(this.state.currentTransX));
-    }
-    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX)+1)>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY)+1)>1)){
-      this.loadImage(Math.floor(this.state.currentTransY-1)*numberTilesRow+Math.floor(this.state.currentTransX-1));
-    }
-    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX)-1)>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY)+1)>1)){
-      this.loadImage(Math.floor(this.state.currentTransY-1)*numberTilesRow+Math.floor(this.state.currentTransX+1));
-    }
-    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX))>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY)-1)>1)){
-      this.loadImage(Math.floor(this.state.currentTransY+1)*numberTilesRow+Math.floor(this.state.currentTransX));
-    }
-    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX)+1)>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY)-1)>1)){
-      this.loadImage(Math.floor(this.state.currentTransY+1)*numberTilesRow+Math.floor(this.state.currentTransX-1));
-    }
-    if ((Math.abs(Math.floor(previousTransX)-Math.floor(this.state.currentTransX)-1)>1)||(Math.abs(Math.floor(previousTransY)-Math.floor(this.state.currentTransY)-1)>1)){
-      this.loadImage(Math.floor(this.state.currentTransY+1)*numberTilesRow+Math.floor(this.state.currentTransX+1));
-    }
+      if (allNewLoaded===true)
+      {
+        if (colorBuffer.getLength()>0){
+      
+          colorBuffer.goToHead();
+          let iNode=colorBuffer.getData();
+          while(iNode!==null){  
+            if (currentDepthLevel!==iNode.depthLevel)
+            {
+              console.log("inside if");
+              colorBuffer.removeNode();
+              iNode=colorBuffer.getData();
+              continue;
+            } 
+            colorBuffer.goNext();
+            iNode=colorBuffer.getData();
+          }
+        } 
+        
+      }
+    } 
 
 
     let startTime;
@@ -1680,21 +1788,28 @@ class ImageViewer extends React.Component {
 
       
       if (colorBuffer.getLength()>0){
-        colorBuffer.goToHead();
+        colorBuffer.goToTail();
         let iNode=colorBuffer.getData();
-        while(iNode!==null){       
-          var mv=mat3.create(); 
-          mat3.translate(mv, cameraTF, [iNode.tileLocationX, iNode.tileLocationY]);
-          var projView = mat3.multiply(mat3.create(), projectionTF, mv);
-          drawTiles(
-            {
-              imageTXT: iNode.texture,
-    
-              projView,
-    
-            }
-          );
-          colorBuffer.goNext();
+        while(iNode!==null){    
+          if (iNode.loaded===true)   
+          {
+            var mv=mat3.create(); 
+            mat3.translate(mv, cameraTF, [iNode.tileLocationX, iNode.tileLocationY]);
+            var projView = mat3.multiply(mat3.create(), projectionTF, mv);
+  
+            let specificTileSize=Math.round(Math.pow(2, maxDepth-iNode.depthLevel));
+            drawTiles(
+              {
+                imageTXT: iNode.texture,
+                position: [[0, 0], [specificTileSize, 0], [0, specificTileSize], [0, specificTileSize], [specificTileSize, 0], [specificTileSize, specificTileSize]],
+                aVertexTextureCoords: [[0, 0], [1, 0], [0, 1], [0, 1], [1, 0], [1, 1]],
+                projView,
+      
+              }
+            );   
+          }
+
+          colorBuffer.goPrevious();
           iNode=colorBuffer.getData();
         }
       }

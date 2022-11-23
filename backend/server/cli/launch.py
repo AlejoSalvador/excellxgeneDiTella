@@ -27,9 +27,11 @@ from dotenv import load_dotenv, find_dotenv
 
 from PIL import Image as image
 from skimage import io as skiio
+from skimage.transform import downscale_local_mean
 import io
 import numpy
 from matplotlib import cm
+import math
 #Todo ALEJO Evitar que sea global y mantener el servidor con misma estructura de antes
 tiles=[]
 imin=[]
@@ -544,17 +546,29 @@ def launch(
     click.echo("[cellxgene] Type CTRL-C at any time to exit.")
 
     image.MAX_IMAGE_PIXELS = None
-    imin = skiio.imread('images/mosaic_Cellbound3_z3-002-002.tif')
+    imin=[]
+    imin.append(skiio.imread('images/mosaic_Cellbound3_z3-002-002.tif'))
     #imin = skiio.imread('images/dinosaur.jpg')
-    M = imin.shape[0]//100
-    N = imin.shape[1]//100
-    tiles = [imin[x:x+M,y:y+N] for x in range(0,imin.shape[0],M) for y in range(0,imin.shape[1],N)]
-    maximu=imin.max()
-    @server.app.route("/return-files/<int:number>")
-    def return_files_tut(number):
+    partitionAmount=128
+    levelsAmount=round(math.log(partitionAmount,2))
+    M = imin[0].shape[0]//partitionAmount
+    N = imin[0].shape[1]//partitionAmount
+    tiles=[]
+    tiles.append([imin[0][x:x+M,y:y+N] for x in range(0,imin[0].shape[0],M) for y in range(0,imin[0].shape[1],N)])
+    maximu=imin[0].max()
+    i=0
+    while partitionAmount>1:
+        partitionAmount=partitionAmount//2
+        imin.append(downscale_local_mean(imin[i], (2,2)))
+        i+=1
+        M = imin[i].shape[0]//partitionAmount
+        N = imin[i].shape[1]//partitionAmount
+        tiles.append([imin[i][x:x+M,y:y+N] for x in range(0,imin[i].shape[0],M) for y in range(0,imin[i].shape[1],N)])
+    @server.app.route("/return-files/<int:number>/<int:depth>")
+    def return_files_tut(number,depth):
         try:
 
-            tileSizeChange=tiles[number]
+            tileSizeChange=tiles[levelsAmount-depth][number]
             tileSizeChange=tileSizeChange.astype(float)
             tileSizeChange=tileSizeChange/maximu
             
