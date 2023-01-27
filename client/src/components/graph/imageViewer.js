@@ -753,10 +753,12 @@ class ImageViewer extends React.Component {
           multiselect
         );
       }
+      let postPolygon = polygon.map((xy) => this.mapScreenToPoint(xy));
+      postPolygon = postPolygon.map((xy) => this.mapImagetoGraph(xy));
       dispatch(
         actions.graphLassoEndAction(
-          layoutChoice.current,
-          polygon.map((xy) => this.mapScreenToPoint(xy)),
+          "spatial",
+          postPolygon,
           multiselect
         )
       );
@@ -1199,6 +1201,19 @@ class ImageViewer extends React.Component {
     vec2.transformMat3(xy, xy, projectionInvTF);
     vec2.transformMat3(xy, xy, cameraInvTF);
     vec2.transformMat3(xy, xy, modelInvTF);
+    return xy;
+  }
+
+  mapImagetoGraph(pin) {
+    /*
+    Map an XY coordinates from imageCoordinates to graphCoordinates.
+    */
+
+
+    /* screen -> gl */
+    let xy=pin;
+    xy[0] = pin[0] / (Math.pow(2,maxDepth)+1);
+    xy[1] = pin[1] / (Math.pow(2,maxDepth)+1);
     return xy;
   }
 
@@ -1745,7 +1760,6 @@ class ImageViewer extends React.Component {
         let specificTileSize=Math.round(Math.pow(2, maxDepth-iNode.depthLevel));
         if (Math.abs(this.state.currentTransX/specificTileSize-iNode.tileLocationX/specificTileSize-0.5)>1.5||Math.abs(this.state.currentTransY/specificTileSize-iNode.tileLocationY/specificTileSize-0.5)>1.5)
         {
-          console.log("inside if");
           colorBuffer.removeNode();
           iNode=colorBuffer.getData();
           continue;
@@ -1762,7 +1776,6 @@ class ImageViewer extends React.Component {
           while(iNode!==null){  
             if (currentDepthLevel!==iNode.depthLevel)
             {
-              console.log("inside if");
               colorBuffer.removeNode();
               iNode=colorBuffer.getData();
               continue;

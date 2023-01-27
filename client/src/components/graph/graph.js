@@ -564,7 +564,7 @@ class Graph extends React.Component {
     const { dispatch, layoutChoice } = this.props;
     dispatch(actions.graphLassoStartAction(layoutChoice.current));
   }
-
+  
   // when a lasso is completed, filter to the points within the lasso polygon
   handleLassoEnd(polygon) {
     const minimumPolygonArea = 10;
@@ -786,7 +786,7 @@ class Graph extends React.Component {
       {
         window.dispatchEvent(new CustomEvent("CellSelectionOnGraph", { 'detail': positionsFiltered }));
       }
-      console.log("filteredPositions",positionsFiltered);
+     // console.log("filteredPositions",positionsFiltered);
       //console.log("annoMatrix",annoMatrix);
       
 
@@ -1128,7 +1128,7 @@ class Graph extends React.Component {
       const y = Y[z];
       if (!(x < minX || x > maxX || y < minY || y > maxY)) {
         if (withinPolygon(polygon, x, y)) {
-          //Here i should register the average and then going to the average position. Be careful that this isnt the real spatial position
+          //Here i should ennumerate the points withinPolygon
           I.push(i);
         }
       }

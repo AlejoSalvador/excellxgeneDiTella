@@ -129,8 +129,11 @@ const _graphBrushWithinRectAction = (type, embName, brushCoords) => async (
 const _graphAllAction = (type, embName) => async (dispatch, getState) => {
   const { obsCrossfilter: prevObsCrossfilter } = getState();
   let obsCrossfilter;
+  let { annoMatrix} = getState();
   if (type === "graph lasso deselect") {
-    obsCrossfilter = await prevObsCrossfilter.select("obs", "name_0", {
+    //resetting the selection across all embeding layouts
+    [annoMatrix, obsCrossfilter] = dispatch(resetSubsetAction({annoMatrix}));
+    obsCrossfilter = await obsCrossfilter.select("obs", "name_0", {
       mode: "all",
     });
   } else {
@@ -171,18 +174,22 @@ export const graphLassoEndAction = (embName, polygon, multiselect) => async (
   dispatch,
   getState
 ) => {
-  const { annoMatrix, obsCrossfilter: prevObsCrossfilter } = getState();
+  let { annoMatrix, obsCrossfilter: prevObsCrossfilter } = getState();
   const isMultiselectOn = multiselect ?? false;
   let selection = {
     mode: "within-polygon",
     polygon,
   };
+
   let obsCrossfilter;
   if (isMultiselectOn) {
     obsCrossfilter = await prevObsCrossfilter.select("obs", "name_0", {
       mode: "all",
     });
   } else {
+      //THIS WAS DONE SO THAT SELECTION DONT CARRY ON BETWEEN SETS
+      //TODO Alejo: It would also be nice that selection across multiple sets with multiselected worked as an intersect instead of union
+    [annoMatrix, prevObsCrossfilter] = dispatch(resetSubsetAction({annoMatrix}));
     obsCrossfilter = prevObsCrossfilter;
   }
 

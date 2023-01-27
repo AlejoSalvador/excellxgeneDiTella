@@ -23,11 +23,17 @@ export async function _switchEmbedding(
   let obsCrossfilter = await new AnnoMatrixObsCrossfilter(
     annoMatrix,
     prevCrossfilter.obsCrossfilter
+  );
+  /* Use the 2 commented lines intead of the line above if you want to reset the crossFilter
+  let obsCrossfilter = await new AnnoMatrixObsCrossfilter(
+    annoMatrix,
+    prevCrossfilter.obsCrossfilter
   ).dropDimension("emb", oldEmbeddingName);
-  obsCrossfilter = await obsCrossfilter.dropDimension("obs", "name_0");
-  obsCrossfilter = await obsCrossfilter.select("emb", newEmbeddingName, {
+  obsCrossfilter = await obsCrossfilter.dropDimension("obs", "name_0"); */
+  /* obsCrossfilter = await obsCrossfilter.select("emb", newEmbeddingName, {
     mode: "all",
-  });
+  }); */
+  
   return [annoMatrix, obsCrossfilter];
 }
 
@@ -172,6 +178,7 @@ export const layoutChoiceAction = (newLayoutChoice) => async (
   dispatch({
     type: "reset subset"
   })  
+  console.log("s1",prevCrossfilter);
   let [annoMatrix, obsCrossfilter] = await _switchEmbedding(
     prevAnnoMatrix,
     prevCrossfilter,
@@ -179,8 +186,10 @@ export const layoutChoiceAction = (newLayoutChoice) => async (
     newLayoutChoice
   );
   
-  [annoMatrix, obsCrossfilter] = dispatch(resetSubsetAction({annoMatrix}))
+  //This line is commented so that there is not a reset everytime I change layouts
+  //[annoMatrix, obsCrossfilter] = dispatch(resetSubsetAction({annoMatrix}))
   
+  console.log("s2",obsCrossfilter);
   dispatch({
     type: "set layout choice",
     layoutChoice: newLayoutChoice,

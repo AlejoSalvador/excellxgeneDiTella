@@ -48,6 +48,7 @@ export default (
       .on("cancel", handleCancelAction);
 
     const lassoContainer = svg.call(lasso);
+    //const lassoContainer = d3.select("#graph-wrapper").select("#lasso-layer").call(lasso);
 
     return { svg, container: lassoContainer, tool: lasso };
   }

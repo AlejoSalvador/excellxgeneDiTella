@@ -10,6 +10,7 @@ const Lasso = () => {
     let closePath;
     let lassoInProgress;
 
+
     const polygonToPath = (polygon) =>
       `M${polygon.map((d) => d.join(",")).join("L")}`;
 
@@ -108,7 +109,9 @@ const Lasso = () => {
 
     // append a <g> with a rect
     const g = svg.append("g").attr("class", "lasso-group");
+    //const g = d3.select("#graph-wrapper").select("#lasso-layer").append("g").attr("class", "lasso-group");
     const bbox = svg.node().getBoundingClientRect();
+    //const bbox = d3.select("#graph-wrapper").select("#lasso-layer").node().getBoundingClientRect();
     const area = g
       .append("rect")
       .attr("width", bbox.width)
