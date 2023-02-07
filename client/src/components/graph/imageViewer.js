@@ -759,7 +759,8 @@ class ImageViewer extends React.Component {
         actions.graphLassoEndAction(
           "spatial",
           postPolygon,
-          multiselect
+          multiselect,
+          true
         )
       );
     }

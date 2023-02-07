@@ -170,7 +170,7 @@ export const graphLassoCancelAction = (embName) =>
 export const graphLassoDeselectAction = (embName) =>
   _graphAllAction("graph lasso deselect", embName);
 
-export const graphLassoEndAction = (embName, polygon, multiselect) => async (
+export const graphLassoEndAction = (embName, polygon, multiselect, fromImage=false) => async (
   dispatch,
   getState
 ) => {
@@ -187,8 +187,7 @@ export const graphLassoEndAction = (embName, polygon, multiselect) => async (
       mode: "all",
     });
   } else {
-      //THIS WAS DONE SO THAT SELECTION DONT CARRY ON BETWEEN SETS
-      //TODO Alejo: It would also be nice that selection across multiple sets with multiselected worked as an intersect instead of union
+      //THIS WAS DONE SO THAT THE SELECTION DOES NOT CARRY ON BETWEEN DIFFERENT EMBEDDINGS
     [annoMatrix, prevObsCrossfilter] = dispatch(resetSubsetAction({annoMatrix}));
     obsCrossfilter = prevObsCrossfilter;
   }
@@ -242,11 +241,21 @@ export const graphLassoEndAction = (embName, polygon, multiselect) => async (
       mode: "all",
     });
   }
-
+  let drawPolygon;
+  if (fromImage)
+  {
+    drawPolygon=new Array();
+  }else
+  {
+    drawPolygon=polygon;
+  }
+  
+  console.log("obsCrossfilter", obsCrossfilter);
+  console.log("drawPolygon",drawPolygon);
   dispatch({
     type: "graph lasso end",
     obsCrossfilter,
-    polygon,
+    polygon: drawPolygon,
   });
 };
 
